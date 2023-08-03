@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="pl">
+	<head>
+		<meta charset="utf-8">
+		<title>ESP32</title>
+		<link rel="stylesheet" href="styleESP32.css">
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+	</head>
+	<body>
+
+
+
+        <div class="tabelaDanych" id="tabelaDanych">
+            <div class="daneTabela">
+                <input type="button" id="TabelaWyjdz" value="Zamknij">
+               
+                <table id="tabela" border="1/2" cellspacing="1" cellpadding="4" class="table" style='font-size: 22px; text-align: center'></table>
+                <script>
+                    var table = document.getElementById("tabela");
+                    var row = table.insertRow(0);
+                    var cell1 = row.insertCell(0);
+                    var cell2 = row.insertCell(1);
+                    var cell3 = row.insertCell(2);
+                    cell1.innerHTML = "Czas [HH:MM:SS]";
+                    cell2.innerHTML = "Temperatura [°C]";
+                    cell3.innerHTML = "Stan włącznika";   
+                </script>
+
+                <script>
+                var i=1;
+                function dodajDaneDoTabeli(czas, temperatura, stan){
+                    var table = document.getElementById("tabela");
+                    var row = table.insertRow(i);
+                    var cell1 = row.insertCell(0);
+                    var cell2 = row.insertCell(1);
+                    var cell3 = row.insertCell(2);
+                    cell1.innerHTML = czas;
+                    cell2.innerHTML = temperatura;
+                    cell3.innerHTML = stan;
+                    if(stan=="Wyłączony")
+                    cell3.style.backgroundColor="red";
+                    if(stan=="Włączony")
+                    cell3.style.backgroundColor="green";
+
+                    i++;
+                }
+                </script>
+            </div>
+        </div>
+
+
+
+        <section>
+            <article class="przyciski">
+                <div class="grupy">
+                    <label>Adres IP urządzenia</label>
+                    <input type="text" id="Ip" value="192.168.0.18" disabled>
+                </div>
+                <div class="grupy">
+                    <label>Status</label>
+                    <input type="text" id="status" value="Trwa łączenie..." disabled>
+                </div>
+                <script>
+                    setInterval(() => {
+                        const Http = new XMLHttpRequest();
+                        const url='http://localhost:8080/status/192.168.0.18';
+                        Http.open("GET", url);
+                        Http.send();
+                        
+                        Http.onreadystatechange = (e) => {
+                            if(Http.responseText=="true")
+                            {
+                                document.getElementById("status").value="Połączono!";
+                                document.getElementById("status").style.color="#2aeb5e";
+                            }
+                            else
+                            {
+                                document.getElementById("status").value="Rozłączono!";
+                                document.getElementById("status").style.color="red";
+                            }
+                        }
+                    }, 3000);
+                </script>
+
+                <div class="grupy">
+                    <label>Okres odczytu (sekundy)</label>
+                    <input type="number" id="okres" value="2" required>
+                </div>
+
+                <input type="button" id="start_stop" value="Start" onclick="funkcja2()">
+                <script>
+                    var id_interval
+                    var stanOn_Off=[];
+                    var stanTemp=[];
+                    var poziomaOs=[];
+                    var czas;
+                    var stan, godzina, temperatura;
+
+                    function zbieraj_dane()
+                    {
+                        if(document.getElementById("start_stop").value=="Start")
+                        {
+                            id_interval = setInterval(() => {
+
+                                czas=new Date();
+                                poziomaOs.push(czas.toLocaleTimeString());
+                                godzina=czas.toLocaleTimeString();
+                              
+                                
+                                const Http = new XMLHttpRequest();
+                                const url='http://localhost:8080/przelacznik/192.168.0.18';
+                                Http.open("GET", url);
+                                Http.send();
+                                
+                                
+                                Http.onloadend = (e) => {
+                                    if(Http.status==200)
+                                    {
+                                        if(Http.responseText=='true')
+                                        {
+                                            stan='Włączony';
+                                            stanOn_Off.push('Włączony');
+                                        }
+                                        else
+                                        {
+                                            stanOn_Off.push('Wyłączony');
+                                            stan='Wyłączony';
+                                        }
+   
+                                        wykresPrzelacznik.destroy();
+                                        rysujOn_Off(stanOn_Off, poziomaOs);
+                                        
+
+
+
+                                        
+                                        const Http2 = new XMLHttpRequest();
+                                        const url2='http://localhost:8080/czujnik/192.168.0.18';
+                                        Http2.open("GET", url2);
+                                        Http2.send();
+        
+                                        Http2.onloadend = (e) => {
+                                            if(Http2.status==200)
+                                            {
+                                                stanTemp.push(Http2.responseText)
+                                                temperatura=Http2.responseText;
+                                                wykresTemperatura.destroy();
+                                                rysujTemperatura(stanTemp,poziomaOs);
+                                                dodajDaneDoTabeli(godzina, temperatura, stan);
+
+                                            }
+                                        }  
+
+
+
+                                    }
+                                }       
+                                
+
+
+                            }, document.getElementById("okres").value*1000);
+                        }
+                        else
+                        {
+                            clearInterval(id_interval);
+                        }
+                    }
+                    function funkcja2()
+                    {
+                        if(document.getElementById("start_stop").value=="Start")
+                        {
+                            zbieraj_dane();
+                            document.getElementById("start_stop").value="Stop";
+                        }
+                        else
+                        {
+                            zbieraj_dane();
+                            document.getElementById("start_stop").value="Start";
+                        }
+                    }
+
+
+                </script>
+                <input type="button" id="przelacznik" value="Włącz" onclick="funkcja()">
+                <script>
+                    function funkcja()
+                    {
+                        if(document.getElementById("przelacznik").value=="Włącz")
+                        {
+                            const Http = new XMLHttpRequest();
+                            const url='http://localhost:8080/przelacznik/wlacz/192.168.0.18';
+                            Http.open("PUT", url);
+                            Http.send();
+                            
+                            
+                            Http.onloadend = (e) => {
+                                if(Http.status==200)
+                                    document.getElementById("przelacznik").value="Wyłącz";
+                                    
+                            }
+                        }
+                        else
+                        {
+                            const Http = new XMLHttpRequest();
+                            const url='http://localhost:8080/przelacznik/wylacz/192.168.0.18';
+                            Http.open("PUT", url);
+                            Http.send();
+
+                            Http.onloadend = (e) => {
+                                if(Http.status==200)
+                                document.getElementById("przelacznik").value="Włącz";
+                            }                     
+                        }
+                    }
+                </script>
+
+            
+                <input type="button" id="tabelaWejdz" value="Tabela danych" >
+                <script>
+                    const otworz=document.getElementById('tabelaWejdz');
+                    const tresc=document.getElementById('tabelaDanych');
+                    const zamknij=document.getElementById('TabelaWyjdz');
+
+                    otworz.addEventListener('click',() => {
+                        tresc.classList.add('show');
+                        document.getElementById('start_stop').style.display='none';
+                        document.getElementById('przelacznik').style.display='none';
+                        document.getElementById('tabelaWejdz').style.display='none';
+                        document.getElementById('okres').style.display='none';
+                    });
+
+                    zamknij.addEventListener('click', () =>{
+                        tresc.classList.remove('show');
+                        document.getElementById('start_stop').style.display='';
+                        document.getElementById('przelacznik').style.display='';
+                        document.getElementById('tabelaWejdz').style.display='';
+                        document.getElementById('okres').style.display='';
+                    });
+
+                </script>
+                
+
+
+            </article>
+            <article class="wykresy">
+                <div>
+                    <canvas id="wykresTemperatura"></canvas>
+                </div>
+                <div>
+                    <canvas id="wykresPrzelacznik"></canvas>
+                </div>
+
+
+                <script>
+                    var wykresTemperatura;
+                    function rysujTemperatura(lista, pozioma) {
+                        var ctx = document.getElementById('wykresTemperatura').getContext('2d');
+                        
+                        wykresTemperatura = new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels:  pozioma,
+                                    
+                                datasets: [{  
+                                    label: 'temperatura',                  
+                                    data: lista,
+                                    borderColor: '#00FF00',
+                                    backgroundColor: '#00FF00',
+                                    fill: false,
+                                    borderColor: 'rgb(75, 192, 192)',
+                                    tension: 0.2
+                                }]
+                            },
+                            options: {
+                                plugins:{
+                                    tooltip: {
+                                        callbacks: {
+                                            label: (item) =>
+                                                `${item.dataset.label}: ${item.formattedValue} °C`,
+                                        },
+                                    },
+
+
+                                    legend:{
+                                        display: false
+                                    },
+                                    title:{
+                                        display:true,
+                                            font: {
+                                                size: 22,
+                                            },
+                                        text: "Wykres temperatury"
+                                    }
+                                },
+                                animation: {
+                                    y: {
+                                        easing: "easeInOutCircs",
+                                        duration: document.getElementById("okres").value*100
+                                    }
+                                    
+                                },
+                                scales: {
+                                    x:{
+                                        title:{
+                                            display:true,
+                                            text:"Czas [HH:MM:SS]",
+                                            font: {
+                                                size: 22
+                                            },                                      
+                                        },
+                                        ticks: {
+                                                font: {
+                                                    size: 22,
+                                                },
+                                                
+                                            },
+                                    },
+                                    y: {
+                                        title:{
+                                            display:true,
+                                            text:"Temperatura [°C]",
+                                            font: {
+                                                size: 22
+                                            },
+                                               
+                                        },
+                                        ticks: {
+                                            font: {
+                                                size: 22,
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        });
+
+                    }
+                    var data=[]
+                    var data2=['30'];
+                    rysujTemperatura(data2,data);
+                </script>
+
+
+                <script>
+                    var wykresPrzelacznik;
+                    function rysujOn_Off(lista, pozioma) {
+                        var ctx = document.getElementById('wykresPrzelacznik').getContext('2d');
+                        
+                        wykresPrzelacznik = new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels:  pozioma,    
+                                datasets: [{  
+                                    label: 'stan',                  
+                                    data: lista,
+                                    borderColor: '#00FF00',
+                                    backgroundColor: '#00FF00',
+                                    stepped: true,
+                                    yAxisID: 'y2',
+                                }]
+                            },
+                            options: {
+                                plugins:{
+                                    legend:{
+                                        display: false
+                                    },
+                                    title:{
+                                        display:true,
+                                            font: {
+                                                size: 22,
+                                            },
+                                        text: "Wykres stanu przełącznika"
+                                    }
+                                },
+                                animation: {
+                                    y: {
+                                        easing: "easeInOutCircs",
+                                        duration: document.getElementById("okres").value*100
+                                    }
+                                },
+                                scales:{
+                                    x:{
+                                        title:{
+                                            display:true,
+                                            text:"Czas [HH:MM:SS]",
+                                            font: {
+                                                size: 22
+                                            },                                           
+                                        },
+                                        ticks: {
+                                                font: {
+                                                    size: 22,
+                                                }
+                                            },
+                                    },
+                                    y2: {
+                                        title:{
+                                            display:true,
+                                            text:"Stan",
+                                            font: {
+                                                size: 22
+                                            },                                           
+                                        },
+                                        ticks: {
+                                                font: {
+                                                    size: 22,
+                                                }
+                                            },
+                                        type: 'category',
+                                        labels: ["Włączony", "Wyłączony"],
+                                        offset: true,
+                                        position: 'left',
+                                        stack: 'demo',
+                                        stackWeight: 1,
+                                        grid: {
+                                        borderColor: 'black'
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+                    var data=[]
+                    rysujOn_Off(data);
+                </script>
+
+            </article > 
+        </section>
+        <footer>
+            <p>Strona wykonana na potrzeby pracy dyplomowej. Autor: Dawid Treszczotko. Strona oraz praca tworzona pod kierunkiem: dr hab. inż. Marek Parfieniuk</p>
+        </footer>
+
+
+	</body>
+</html>
